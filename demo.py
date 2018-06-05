@@ -157,7 +157,10 @@ if __name__ == '__main__':
 
   # train set
   # -- Note: Use validation set and disable the flipped to enable faster loading.
-
+  print("-------Aquest es el path que ha de tenir-------")
+  print(args.load_dir)
+  print(args.net)
+  print(args.dataset)
   input_dir = args.load_dir + "/" + args.net + "/" + args.dataset
   if not os.path.exists(input_dir):
     raise Exception('There is no input directory for loading network from ' + input_dir)
@@ -189,8 +192,12 @@ if __name__ == '__main__':
   print("load checkpoint %s" % (load_name))
   if args.cuda > 0:
     checkpoint = torch.load(load_name)
+    print("Per cuda eh")
   else:
     checkpoint = torch.load(load_name, map_location=(lambda storage, loc: storage))
+    print("Sin cuda eh")
+  print(type(checkpoint))
+  print(checkpoint.keys())
   fasterRCNN.load_state_dict(checkpoint['model'])
   if 'pooling_mode' in checkpoint.keys():
     cfg.POOLING_MODE = checkpoint['pooling_mode']
