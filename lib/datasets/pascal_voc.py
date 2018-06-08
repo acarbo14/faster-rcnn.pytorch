@@ -317,7 +317,8 @@ class pascal_voc(imdb):
             print('AP for {} = {:.4f}'.format(cls, ap))
             with open(os.path.join(output_dir, cls + '_pr.pkl'), 'wb') as f:
                 pickle.dump({'rec': rec, 'prec': prec, 'ap': ap}, f)
-        print('Mean AP = {:.4f}'.format(np.mean(aps)))
+        meanAP = np.mean(aps)
+        print('Mean AP = {:.4f}'.format(meanAP))
         print('~~~~~~~~')
         print('Results:')
         for ap in aps:
@@ -331,6 +332,7 @@ class pascal_voc(imdb):
         print('Recompute with `./tools/reval.py --matlab ...` for your paper.')
         print('-- Thanks, The Management')
         print('--------------------------------------------------------------')
+        return meanAP
 
     def _do_matlab_eval(self, output_dir='output'):
         print('-----------------------------------------------------')
@@ -349,7 +351,7 @@ class pascal_voc(imdb):
 
     def evaluate_detections(self, all_boxes, output_dir):
         self._write_voc_results_file(all_boxes)
-        self._do_python_eval(output_dir)
+        meanAP = self._do_python_eval(output_dir)
         if self.config['matlab_eval']:
             self._do_matlab_eval(output_dir)
         if self.config['cleanup']:
@@ -358,7 +360,7 @@ class pascal_voc(imdb):
                     continue
                 filename = self._get_voc_results_file_template().format(cls)
                 os.remove(filename)
-
+        return meanAP
     def competition_mode(self, on):
         if on:
             self.config['use_salt'] = False

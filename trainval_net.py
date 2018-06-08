@@ -201,7 +201,9 @@ if __name__ == '__main__':
   # -- Note: Use validation set and disable the flipped to enable faster loading.
   cfg.TRAIN.USE_FLIPPED = True
   cfg.USE_GPU_NMS = args.cuda
-  imdb, roidb, ratio_list, ratio_index = combined_roidb(args.imdb_name)
+  imdb, roidb, ratio_list, ratio_index = {x: combined_roidb(args.imdb_name) for x in ['train','val']
+  imdbval, roidbval, ratio_listval, ratio_indexval = combined_roidb(args.imdbval_name)
+
   train_size = len(roidb)
 
   print('{:d} roidb entries'.format(len(roidb)))
@@ -212,12 +214,16 @@ if __name__ == '__main__':
 
   sampler_batch = sampler(train_size, args.batch_size)
 
-  dataset = roibatchLoader(roidb, ratio_list, ratio_index, args.batch_size, \
+  train_dataset = {roibatchLoader(roidb, ratio_list, ratio_index, args.batch_size, \
                            imdb.num_classes, training=True)
 
-  dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size,
-                            sampler=sampler_batch, num_workers=args.num_workers)
+  val_dataset = roibatchLoader(roidbval, ratio_listval, ratio_indexval, args.batch_size \
+                            imdbval.num_classes, training = True)
 
+  train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size,
+                            sampler=sampler_batch, num_workers=args.num_workers)
+  val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size,
+                            sampler=sampler_batch, num_workers=args.num_workers)
   # initilize the tensor holder here.
   im_data = torch.FloatTensor(1)
   im_info = torch.FloatTensor(1)
@@ -309,21 +315,15 @@ if __name__ == '__main__':
         adjust_learning_rate(optimizer, args.lr_decay_gamma)
         lr *= args.lr_decay_gamma
     loss_to_save = torch.zeros(iters_per_epoch)
-    data_iter = iter(dataloader)
+    train_data_iter = iter(train_dataloader)
+
+    #M'he quedat aqui!!!
     for step in range(iters_per_epoch):
-      data = next(data_iter)
+      data = next(train_data_iter)
       im_data.data.resize_(data[0].size()).copy_(data[0])
       im_info.data.resize_(data[1].size()).copy_(data[1])
       gt_boxes.data.resize_(data[2].size()).copy_(data[2])
       num_boxes.data.resize_(data[3].size()).copy_(data[3])
-      print('Im data')
-      print(im_data.size())
-      print('Im info')
-      print(im_info.size())
-      print('gt_boxes')
-      print(gt_boxes.size())
-      print('num_boxes')
-      print(num_boxes.size())
       fasterRCNN.zero_grad()
       rois, cls_prob, bbox_pred, \
       rpn_loss_cls, rpn_loss_box, \
