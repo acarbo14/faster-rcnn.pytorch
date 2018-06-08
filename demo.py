@@ -371,7 +371,7 @@ if __name__ == '__main__':
             # cv2.imshow('test', im2show)
             # cv2.waitKey(0)
 
-            result_path = os.path.join(args.image_dir,detections, imglist[num_images][:-4] + '_det_'+str(i)+'.jpg')
+            result_path = os.path.join(args.image_dir,'detections', imglist[num_images][:-4] + '_det_'+str(i)+'.jpg')
             cv2.imwrite(result_path, im2show)
         else:
             im2showRGB = cv2.cvtColor(im2show, cv2.COLOR_BGR2RGB)
