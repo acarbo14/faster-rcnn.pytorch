@@ -7,6 +7,7 @@
 import torch
 from model.utils.config import cfg
 if torch.cuda.is_available():
+    print("Ei q torch cuda is is_available")
     from model.nms.nms_gpu import nms_gpu
 from model.nms.nms_cpu import nms_cpu
 

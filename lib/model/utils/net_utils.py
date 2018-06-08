@@ -45,9 +45,12 @@ def clip_gradient(model, clip_norm):
     totalnorm = np.sqrt(totalnorm)
 
     norm = clip_norm / max(totalnorm, clip_norm)
+
+    print(type(norm))
     for p in model.parameters():
         if p.requires_grad:
-            p.grad.mul_(norm)
+            p.grad.mul_(float(norm))
+
 
 def vis_detections(im, class_name, dets, thresh=0.8):
     """Visual debugging of detections."""
