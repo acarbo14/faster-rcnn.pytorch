@@ -206,9 +206,13 @@ class pascal_voc(imdb):
             radius = annot['radius'][idx]
             label = annot['label'][idx]
             boxes[idx,:] = [c_x, c_y, radius, label]
-            gt_classes
-        ##----aqui no meu
+            seg_areas[idx] = (radius**2)*3.14
+        return {'boxes': boxes,
+                'flipped': False,
+                'seg_areas': seg_areas}
 
+        ##----aqui no meu
+        '''
         tree = ET.parse(filename)
         objs = tree.findall('object')
         # if not self.config['use_diff']:
@@ -254,7 +258,7 @@ class pascal_voc(imdb):
                 'gt_ishard': ishards,
                 'gt_overlaps': overlaps,
                 'flipped': False,
-                'seg_areas': seg_areas}
+                'seg_areas': seg_areas}'''
 
     def _get_comp_id(self):
         comp_id = (self._comp_id + '_' + self._salt if self.config['use_salt']
