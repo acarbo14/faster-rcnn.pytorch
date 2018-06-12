@@ -113,7 +113,7 @@ class pascal_voc(imdb):
             print('{} gt roidb loaded from {}'.format(self.name, cache_file))
             return roidb
 
-        gt_roidb = [self._load_pascal_annotation(index)
+        gt_roidb = [self._load_underwood_annotation(index)
                     for index in self.image_index]
         with open(cache_file, 'wb') as fid:
             pickle.dump(gt_roidb, fid, pickle.HIGHEST_PROTOCOL)
@@ -194,8 +194,20 @@ class pascal_voc(imdb):
         """
         filename = os.path.join(self._data_path, 'annotations', index + '.csv')
         annot = pd.read_csv(filename)
-        
-
+        num_objs = len(annot.values)
+        boxes = np.zeros((num_objs, 4), dtype=np.uint16)        
+        gt_classes = np.zeros((num_objs), dtype=np.int32)
+        overlaps = np.zeros((num_objs, self.num_classes), dtype=np.float32)
+        seg_areas = np.zeros((num_objs), dtype=np.float32)
+        ishards = np.zeros((num_objs), dtype=np.int32)
+        for idx in range(num_objs):
+            c_x = annot['c-x'][idx]
+            c_y = annot['c-y'][idx]
+            radius = annot['radius'][idx]
+            label = annot['label'][idx]
+            boxes[idx,:] = [c_x, c_y, radius, label]
+            gt_classes
+        ##----aqui no meu
 
         tree = ET.parse(filename)
         objs = tree.findall('object')
