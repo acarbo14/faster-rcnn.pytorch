@@ -16,7 +16,6 @@ import argparse
 import pprint
 import pdb
 import time
-import pickle
 
 import torch
 from torch.autograd import Variable
@@ -60,7 +59,7 @@ def parse_args():
                       default=10000, type=int)
 
   parser.add_argument('--save_dir', dest='save_dir',
-                      help='directory to save models', default="./data/in_training_models_with_loss_v2",
+                      help='directory to save models', default="/work/acarbo/faster_rcnn/data/underwood_models",
                       nargs=argparse.REMAINDER)
   parser.add_argument('--nw', dest='num_workers',
                       help='number of worker to load data',
@@ -167,6 +166,10 @@ if __name__ == '__main__':
       args.imdb_name = "voc_2007_trainval+voc_2012_trainval"
       args.imdbval_name = "voc_2007_test"
       args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
+  elif args.dataset == "underwood":
+      args.imdb_name = "train"
+      args.imdbval_name = "val"
+      args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50']
   elif args.dataset == "coco":
       args.imdb_name = "coco_2014_train+coco_2014_valminusminival"
       args.imdbval_name = "coco_2014_minival"
@@ -181,6 +184,7 @@ if __name__ == '__main__':
       args.imdb_name = "vg_150-50-50_minitrain"
       args.imdbval_name = "vg_150-50-50_minival"
       args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50']
+
 
   args.cfg_file = "cfgs/{}_ls.yml".format(args.net) if args.large_scale else "cfgs/{}.yml".format(args.net)
 
@@ -201,10 +205,15 @@ if __name__ == '__main__':
   # -- Note: Use validation set and disable the flipped to enable faster loading.
   cfg.TRAIN.USE_FLIPPED = True
   cfg.USE_GPU_NMS = args.cuda
-  imdb, roidb, ratio_list, ratio_index = {x: combined_roidb(args.imdb_name) for x in ['train','val']
-  imdbval, roidbval, ratio_listval, ratio_indexval = combined_roidb(args.imdbval_name)
 
-  train_size = len(roidb)
+  imdb, roidb, ratio_list, ratio_index = combined_roidb(args.imdb_name)
+  imdbval, roidbval, ratio_listval, ratio_indexval = combined_roidb(args.imdbval_name)
+  set_size = {}
+  set_size = {'train': len(roidb),
+            'val': len(roidbval)}
+
+  print(set_size)
+
 
   print('{:d} roidb entries'.format(len(roidb)))
 
@@ -212,23 +221,35 @@ if __name__ == '__main__':
   if not os.path.exists(output_dir):
     os.makedirs(output_dir)
 
-  sampler_batch = sampler(train_size, args.batch_size)
+  sampler_batch = sampler(set_size['train'], args.batch_size)
+  dataset = {}
+  dataset = {'train': roibatchLoader(roidb, ratio_list, ratio_index, args.batch_size, \
+                           imdb.num_classes, training=True),
+              'val': roibatchLoader(roidbval, ratio_listval, ratio_indexval, args.batch_size, \
+                           imdb.num_classes, training=True, normalize = False)}
+  
+  dataloader = {}
+  dataloader={'train': torch.utils.data.DataLoader(dataset['train'], batch_size=args.batch_size,
+                            sampler=sampler_batch, num_workers=args.num_workers),
+              'val': torch.utils.data.DataLoader(dataset['val'], batch_size=args.batch_size,
+                            shuffle=False ,num_workers=0,
+                            pin_memory=True)}
+  
+                                  
+  
+  #dataloader =torch.utils.data.DataLoader(dataset, batch_size=args.batch_size,
+  #                          sampler=sampler_batch, num_workers=args.num_workers)
 
-  train_dataset = {roibatchLoader(roidb, ratio_list, ratio_index, args.batch_size, \
-                           imdb.num_classes, training=True)
-
-  val_dataset = roibatchLoader(roidbval, ratio_listval, ratio_indexval, args.batch_size \
-                            imdbval.num_classes, training = True)
-
-  train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size,
-                            sampler=sampler_batch, num_workers=args.num_workers)
-  val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size,
-                            sampler=sampler_batch, num_workers=args.num_workers)
   # initilize the tensor holder here.
   im_data = torch.FloatTensor(1)
   im_info = torch.FloatTensor(1)
   num_boxes = torch.LongTensor(1)
   gt_boxes = torch.FloatTensor(1)
+
+  im_data_val = torch.FloatTensor(1)
+  im_info_val = torch.FloatTensor(1)
+  num_boxes_val = torch.LongTensor(1)
+  gt_boxes_val = torch.FloatTensor(1)
 
 
   # ship to cuda
@@ -238,11 +259,22 @@ if __name__ == '__main__':
     num_boxes = num_boxes.cuda()
     gt_boxes = gt_boxes.cuda()
 
+    im_data_val = im_data_val.cuda()
+    im_info_val = im_info_val.cuda()
+    num_boxes_val = num_boxes_val.cuda()
+    gt_boxes_val = gt_boxes_val.cuda()
+
+
   # make variable
   im_data = Variable(im_data)
   im_info = Variable(im_info)
   num_boxes = Variable(num_boxes)
   gt_boxes = Variable(gt_boxes)
+
+  im_data_val = Variable(im_data_val)
+  im_info_val = Variable(im_info_val)
+  num_boxes_val = Variable(num_boxes_val)
+  gt_boxes_val = Variable(gt_boxes_val)
 
   if args.cuda:
     cfg.CUDA = True
@@ -303,55 +335,45 @@ if __name__ == '__main__':
   if args.cuda:
     fasterRCNN.cuda()
 
-  iters_per_epoch = int(train_size / args.batch_size)
-  train_loss_epoch = torch.zeros(args.max_epochs)
-  print('Aixo {} ha de tenir el mateix que aixo {}'.format(len(train_loss_epoch),len(range(args.start_epoch, args.max_epochs + 1))))
+  #iters_per_epoch = int(train_size / args.batch_size)
+  iters_per_epoch = {phase: int(set_size[phase] / args.batch_size) for phase in ['train','val']} 
+  print(iters_per_epoch)
+  print(iters_per_epoch['train'])
+  print(iters_per_epoch['val'])
+  print("Fins aqui prou be")
   for epoch in range(args.start_epoch, args.max_epochs + 1):
     # setting to train mode
     fasterRCNN.train()
     loss_temp = 0
     start = time.time()
-    if epoch % (args.lr_decay_step + 1) == 0:
+
+    #for phase in ['train','val']:
+    
+
+    if epoch % (args.lr_decay_step + 1) == 0 :
         adjust_learning_rate(optimizer, args.lr_decay_gamma)
         lr *= args.lr_decay_gamma
-    loss_to_save = torch.zeros(iters_per_epoch)
-    train_data_iter = iter(train_dataloader)
 
-    #M'he quedat aqui!!!
-    for step in range(iters_per_epoch):
-      data = next(train_data_iter)
+    data_iter = iter(dataloader['train'])
+    for step in range(iters_per_epoch['train']):
+      data = next(data_iter)
       im_data.data.resize_(data[0].size()).copy_(data[0])
       im_info.data.resize_(data[1].size()).copy_(data[1])
       gt_boxes.data.resize_(data[2].size()).copy_(data[2])
       num_boxes.data.resize_(data[3].size()).copy_(data[3])
+
       fasterRCNN.zero_grad()
       rois, cls_prob, bbox_pred, \
       rpn_loss_cls, rpn_loss_box, \
       RCNN_loss_cls, RCNN_loss_bbox, \
       rois_label = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
 
-      dict_in_to_save = {
-        'im_data': im_data,
-        'im_info':im_info,
-        'gt_boxes':gt_boxes,
-        'num_boxes':num_boxes
-      }
-      dict_out_to_save = {
-        'rpn_loss_cls': rpn_loss_cls,
-        'rpn_loss_box': rpn_loss_box ,
-        'RCNN_loss_cls':RCNN_loss_cls,
-        'RCNN_loss_bbox':RCNN_loss_bbox
-      }
-      if step == 2:
-        pickle.dump(dict_in_to_save, open('train_in.pkl','wb'))
-        pickle.dump(dict_out_to_save, open('train_out.pkl','wb'))
 
-      loss = rpn_loss_cls.mean() + rpn_loss_box.mean() \
+      loss_train = rpn_loss_cls.mean() + rpn_loss_box.mean() \
            + RCNN_loss_cls.mean() + RCNN_loss_bbox.mean()
-      loss_temp += loss.data[0]
+      loss_temp += loss_train.data[0]
       #print("Estem aqui??")
-
-      loss_to_save[step] = loss.data[0]
+      
       # backward
       optimizer.zero_grad()
       loss.backward()
@@ -378,9 +400,24 @@ if __name__ == '__main__':
           loss_rcnn_box = RCNN_loss_bbox.data[0]
           fg_cnt = torch.sum(rois_label.data.ne(0))
           bg_cnt = rois_label.data.numel() - fg_cnt
+        #començo
+        data_iter_val = iter(dataloader['val'])      
+        data_val = data_iter_val[np.random.randint(0,iters_per_epoch['val'])]
+        im_data_val.data.resize_(data_val[0].size()).copy_(data_val[0])
+        im_info_val.data.resize_(data_val[1].size()).copy_(data_val[1])
+        gt_boxes_val.data.resize_(data_val[2].size()).copy_(data_val[2])
+        num_boxes_val.data.resize_(data_val[3].size()).copy_(data_val[3])
 
-        print("[session %d][epoch %2d][iter %4d/%4d] loss: %.4f, lr: %.2e" \
-                                % (args.session, epoch, step, iters_per_epoch, loss_temp, lr))
+        rois__val, cls_prob_val, bbox_pred_val, \
+        rpn_loss_cls_val, rpn_loss_box_val, \
+        RCNN_loss_cls_val, RCNN_loss_bbox_val, \
+        rois_label_val = fasterRCNN(im_data_val, im_info_val, gt_boxes_val, num_boxes_val)
+
+        loss_val = rpn_loss_cls_val.mean() + rpn_loss_box_val.mean() \
+           + RCNN_loss_cls_val.mean() + RCNN_loss_bbox_val.mean()           
+        #acabo
+        print("[session %d][epoch %2d][iter %4d/%4d] trainloss: %.4f, validateloss: %.4f, lr: %.2e" \
+                                % (args.session, epoch, step, iters_per_epoch['train'], loss_temp,loss_val.data[0], lr))
         print("\t\t\tfg/bg=(%d/%d), time cost: %f" % (fg_cnt, bg_cnt, end-start))
         print("\t\t\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box %.4f" \
                       % (loss_rpn_cls, loss_rpn_box, loss_rcnn_cls, loss_rcnn_box))
@@ -394,7 +431,6 @@ if __name__ == '__main__':
           }
           for tag, value in info.items():
             logger.scalar_summary(tag, value, step)
-
 
         loss_temp = 0
         start = time.time()
@@ -420,11 +456,6 @@ if __name__ == '__main__':
         'class_agnostic': args.class_agnostic,
       }, save_name)
     print('save model: {}'.format(save_name))
-    train_loss_epoch[epoch-1] = loss_to_save.mean()
-    pickle.dump(train_loss_epoch,open('train_loss_epoch'+str(epoch)+'.pkl','wb'))
+
     end = time.time()
     print(end - start)
-  #Guardem el loss per epoques
-  if not os.path.exists('output_train'):
-    os.makedirs('output_train')
-  pickle.dump(train_loss_epoch,open('output_train/train_loss_v2.pkl','wb'))
