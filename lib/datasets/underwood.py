@@ -25,9 +25,8 @@ try:
 except NameError:
     xrange = range  # Python 3
 
-class underwood(imdb)
-class pascal_voc(imdb):
-    def __init__(self, image_set, year, devkit_path=None):
+class underwood(imdb):
+    def __init__(self, image_set, devkit_path=None):
         imdb.__init__(self, image_set)
         self._year = year
         self._image_set = image_set
