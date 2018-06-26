@@ -13,6 +13,7 @@ import glob
 import uuid
 import scipy.io as sio
 import xml.etree.ElementTree as ET
+import pandas as pd
 import pickle
 from .imdb import imdb
 from .imdb import ROOT_DIR
@@ -28,7 +29,7 @@ except NameError:
 class underwood(imdb):
     def __init__(self, image_set, devkit_path=None):
         imdb.__init__(self, image_set)
-        self._year = year
+        #self._year = year
         self._image_set = image_set
         self._devkit_path = self._get_default_path() if devkit_path is None \
             else devkit_path
@@ -191,27 +192,10 @@ class underwood(imdb):
         Load image and bounding boxes info from XML file in the PASCAL VOC
         format.
         """
-        filename = os.path.join(self._data_path, 'annotations', index + '.csv')
-        annot = pd.read_csv(filename)
-        num_objs = len(annot.values)
-        boxes = np.zeros((num_objs, 4), dtype=np.uint16)        
-        gt_classes = np.zeros((num_objs), dtype=np.int32)
-        overlaps = np.zeros((num_objs, self.num_classes), dtype=np.float32)
-        seg_areas = np.zeros((num_objs), dtype=np.float32)
-        ishards = np.zeros((num_objs), dtype=np.int32)
-        for idx in range(num_objs):
-            c_x = annot['c-x'][idx]
-            c_y = annot['c-y'][idx]
-            radius = annot['radius'][idx]
-            label = annot['label'][idx]
-            boxes[idx,:] = [c_x, c_y, radius, label]
-            seg_areas[idx] = (radius**2)*3.14
-        return {'boxes': boxes,
-                'flipped': False,
-                'seg_areas': seg_areas}
+        
 
         ##----aqui no meu
-        '''
+        filename = os.path.join(self._data_path, 'square_annotations', index + '.xml')
         tree = ET.parse(filename)
         objs = tree.findall('object')
         # if not self.config['use_diff']:
@@ -233,12 +217,12 @@ class underwood(imdb):
 
         # Load object bounding boxes into a data frame.
         for ix, obj in enumerate(objs):
-            bbox = obj.find('bndbox')
+            bbox = obj.find('bbox')
             # Make pixel indexes 0-based
-            x1 = float(bbox.find('xmin').text) - 1
-            y1 = float(bbox.find('ymin').text) - 1
-            x2 = float(bbox.find('xmax').text) - 1
-            y2 = float(bbox.find('ymax').text) - 1
+            x1 = float(bbox.find('xmin').text) 
+            y1 = float(bbox.find('ymin').text) 
+            x2 = float(bbox.find('xmax').text) 
+            y2 = float(bbox.find('ymax').text) 
 
             diffc = obj.find('difficult')
             difficult = 0 if diffc == None else int(diffc.text)
@@ -257,7 +241,7 @@ class underwood(imdb):
                 'gt_ishard': ishards,
                 'gt_overlaps': overlaps,
                 'flipped': False,
-                'seg_areas': seg_areas}'''
+                'seg_areas': seg_areas}
 
     def _get_comp_id(self):
         comp_id = (self._comp_id + '_' + self._salt if self.config['use_salt']

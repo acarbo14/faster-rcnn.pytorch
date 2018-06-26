@@ -27,7 +27,7 @@ for year in ['2007', '2012']:
 
 # Set up underwood
 for split in ['all', 'test', 'train', 'train_val', 'val']:
-  name = 'underwood_{}'.format(split)
+  name = split
   __sets[name] = (lambda split=split: underwood(split))
 
 
