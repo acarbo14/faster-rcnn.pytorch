@@ -18,7 +18,7 @@ import pdb
 
 class vgg16(_fasterRCNN):
   def __init__(self, classes, pretrained=False, class_agnostic=False):
-    self.model_path = 'data/pretrained_model/vgg16_caffe.pth'
+    self.model_path = '/work/acarbo/faster_rcnn/data/pretrained_model/vgg16_caffe.pth'
     #self.model_path = 'data/pretrained_model/vgg16/pascal_voc/faster_rcnn_1_6_10021.pth'
     self.dout_base_model = 512
     self.pretrained = pretrained
