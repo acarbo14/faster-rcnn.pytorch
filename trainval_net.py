@@ -16,6 +16,7 @@ import argparse
 import pprint
 import pdb
 import time
+import pickle
 
 import torch
 from torch.autograd import Variable
@@ -50,7 +51,7 @@ def parse_args():
                       default=1, type=int)
   parser.add_argument('--epochs', dest='max_epochs',
                       help='number of epochs to train',
-                      default=20, type=int)
+                      default=100, type=int)
   parser.add_argument('--disp_interval', dest='disp_interval',
                       help='number of iterations to display',
                       default=100, type=int)
@@ -59,7 +60,7 @@ def parse_args():
                       default=10000, type=int)
 
   parser.add_argument('--save_dir', dest='save_dir',
-                      help='directory to save models', default="/work/acarbo/faster_rcnn/data/underwood_models",
+                      help='directory to save models', default="/work/acarbo/faster_rcnn/data/underwood3_models",
                       nargs=argparse.REMAINDER)
   parser.add_argument('--nw', dest='num_workers',
                       help='number of worker to load data',
@@ -207,33 +208,35 @@ if __name__ == '__main__':
   cfg.USE_GPU_NMS = args.cuda
 
   imdb, roidb, ratio_list, ratio_index = combined_roidb(args.imdb_name)
-  imdbval, roidbval, ratio_listval, ratio_indexval = combined_roidb(args.imdbval_name)
-  set_size = {}
-  set_size = {'train': len(roidb),
-            'val': len(roidbval)}
 
-  print(set_size)
+  cfg.TRAIN.USE_FLIPPED = False
+  imdbval, roidbval, ratio_listval, ratio_indexval = combined_roidb(args.imdbval_name)  
 
-
-  print('{:d} roidb entries'.format(len(roidb)))
+  print('{:d} roidb training entries'.format(len(roidb)))
+  print('{:d} roidb validation entries'.format(len(roidbval)))
 
   output_dir = args.save_dir + "/" + args.net + "/" + args.dataset
   if not os.path.exists(output_dir):
     os.makedirs(output_dir)
 
-  sampler_batch = sampler(set_size['train'], args.batch_size)
+  
+  
   dataset = {}
   dataset = {'train': roibatchLoader(roidb, ratio_list, ratio_index, args.batch_size, \
                            imdb.num_classes, training=True),
               'val': roibatchLoader(roidbval, ratio_listval, ratio_indexval, args.batch_size, \
-                           imdb.num_classes, training=True, normalize = False)}
-  
+                           imdbval.num_classes, training=True, normalize = False)}
+  set_size = {}
+  '''set_size = {'train': len(roidb),
+            'val': len(roidbval)}'''
+  set_size = {phase: len(dataset[phase]) for phase in ['train','val']}
+  train_sampler_batch = sampler(set_size['train'], args.batch_size)
   dataloader = {}
   dataloader={'train': torch.utils.data.DataLoader(dataset['train'], batch_size=args.batch_size,
-                            sampler=sampler_batch, num_workers=args.num_workers),
+                             sampler=train_sampler_batch, num_workers=args.num_workers),
               'val': torch.utils.data.DataLoader(dataset['val'], batch_size=args.batch_size,
-                            shuffle=False ,num_workers=0,
-                            pin_memory=True)}
+                                shuffle=False, num_workers=0,
+                                pin_memory=True)}
   
                                   
   
@@ -341,6 +344,8 @@ if __name__ == '__main__':
   print(iters_per_epoch['train'])
   print(iters_per_epoch['val'])
   print("Fins aqui prou be")
+  loss_train = torch.zeros(args.max_epochs)
+  loss_val = torch.zeros(args.max_epochs)
   for epoch in range(args.start_epoch, args.max_epochs + 1):
     # setting to train mode
     fasterRCNN.train()
@@ -349,13 +354,15 @@ if __name__ == '__main__':
 
     for phase in ['train','val']:
     
-
+      
       if epoch % (args.lr_decay_step + 1) == 0 and phase == 'train':
           adjust_learning_rate(optimizer, args.lr_decay_gamma)
           lr *= args.lr_decay_gamma
 
+      loss_save = 0
       data_iter = iter(dataloader[phase])
       for step in range(iters_per_epoch[phase]):
+        
         data = next(data_iter)
         im_data.data.resize_(data[0].size()).copy_(data[0])
         im_info.data.resize_(data[1].size()).copy_(data[1])
@@ -372,6 +379,7 @@ if __name__ == '__main__':
         loss = rpn_loss_cls.mean() + rpn_loss_box.mean() \
              + RCNN_loss_cls.mean() + RCNN_loss_bbox.mean()
         loss_temp += loss.data[0]
+        loss_save += loss.data[0]
         #print("Estem aqui??")
         
         if phase == 'train':
@@ -381,11 +389,17 @@ if __name__ == '__main__':
           if args.net == "vgg16":
               clip_gradient(fasterRCNN, 10.00)
           optimizer.step()
-
-        if step % args.disp_interval == 0:
+        if phase == 'train':
+          aux = step % 100
+        elif phase == 'val':
+          aux = step % 20
+        if aux == 0:
           end = time.time()
           if step > 0:
-            loss_temp /= args.disp_interval
+            if phase == 'train':
+              loss_temp /= 100
+            elif phase == 'val':
+              loss_temp /= 20
 
           if args.mGPUs:
             loss_rpn_cls = rpn_loss_cls.mean().data[0]
@@ -419,29 +433,41 @@ if __name__ == '__main__':
               logger.scalar_summary(tag, value, step)
 
           loss_temp = 0
+               
           start = time.time()
+      if phase == 'train':
+        loss_train[epoch-1] = loss_save/iters_per_epoch[phase]
+      elif phase == 'val':
+        loss_val[epoch-1] = loss_save/iters_per_epoch[phase]
 
-    if args.mGPUs:
-      save_name = os.path.join(output_dir, 'faster_rcnn_{}_{}_{}.pth'.format(args.session, epoch, step))
-      save_checkpoint({
-        'session': args.session,
-        'epoch': epoch + 1,
-        'model': fasterRCNN.module.state_dict(),
-        'optimizer': optimizer.state_dict(),
-        'pooling_mode': cfg.POOLING_MODE,
-        'class_agnostic': args.class_agnostic,
-      }, save_name)
-    else:
-      save_name = os.path.join(output_dir, 'faster_rcnn_{}_{}_{}.pth'.format(args.session, epoch, step))
-      save_checkpoint({
-        'session': args.session,
-        'epoch': epoch + 1,
-        'model': fasterRCNN.state_dict(),
-        'optimizer': optimizer.state_dict(),
-        'pooling_mode': cfg.POOLING_MODE,
-        'class_agnostic': args.class_agnostic,
-      }, save_name)
-    print('save model: {}'.format(save_name))
+
+
+      if phase == 'train':
+        if args.mGPUs:
+          save_name = os.path.join(output_dir, 'faster_rcnn_{}_{}_{}.pth'.format(args.session, epoch, step))
+          save_checkpoint({
+            'session': args.session,
+            'epoch': epoch + 1,
+            'model': fasterRCNN.module.state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'pooling_mode': cfg.POOLING_MODE,
+            'class_agnostic': args.class_agnostic,
+          }, save_name)
+        else:
+          save_name = os.path.join(output_dir, 'faster_rcnn_{}_{}_{}.pth'.format(args.session, epoch, step))
+          save_checkpoint({
+            'session': args.session,
+            'epoch': epoch + 1,
+            'model': fasterRCNN.state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'pooling_mode': cfg.POOLING_MODE,
+            'class_agnostic': args.class_agnostic,
+          }, save_name)
+        print('save model: {}'.format(save_name))
 
     end = time.time()
     print(end - start)
+  loss_info = {'train' : loss_train, 'val' : loss_val}
+  if not os.path.exists('output_train'):
+    os.makedirs('output_train')
+  pickle.dump(loss_info,open('output_trainval/loss_info.pkl','wb'))
