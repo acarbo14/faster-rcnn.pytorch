@@ -122,7 +122,7 @@ In the data folder is where datasets and models must be stored
 * **Visual Genome**: Please follow the instructions in [bottom-up-attention](https://github.com/peteanderson80/bottom-up-attention) to prepare Visual Genome dataset. You need to download the images and object annotation files first, and then perform proprecessing to obtain the vocabulary and cleansed annotations based on the scripts provided in this repository.
 
 * **Underwood_dataset**: 
-If annotations are in bounding circles, there's is necessary to execute square_annot.py script that annotates in square bounding boxes and in a similiar format that VOC annotations
+If annotations are in bounding circles, there's is necessary to execute square_annot.py script that annotates in square bounding boxes and in a similiar format that VOC annotations. See the dataset structure [here](http://data.acfr.usyd.edu.au/ag/treecrops/2016-multifruit/)
 
 ### Pretrained Model
 
