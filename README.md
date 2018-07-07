@@ -1,9 +1,13 @@
-# A *Faster* Pytorch Implementation of Faster R-CNN
+# A *Faster* Pytorch Implementation of Faster R-CNN for fruit detection
 
+This project is a pytorch implementation of a faster R-CNN for fruit detection, it's based on implementation of:
+* [jwyang/faster_rcnn.pytorch](https://github.com/jwyang/faster_rcnn_pytorch), developed based on Pytorch + Numpy
 ## Introduction
 
 This project is a *faster* pytorch implementation of faster R-CNN, aimed to accelerating the training of faster R-CNN object detection models. Recently, there are a number of good implementations:
 
+
+* [jwyang/faster_rcnn.pytorch](https://github.com/jwyang/faster_rcnn_pytorch), developed based on Pytorch + Numpy
 * [rbgirshick/py-faster-rcnn](https://github.com/rbgirshick/py-faster-rcnn), developed based on Pycaffe + Numpy
 
 * [longcw/faster_rcnn_pytorch](https://github.com/longcw/faster_rcnn_pytorch), developed based on Pytorch + Numpy
@@ -26,15 +30,6 @@ During our implementing, we referred the above implementations, especailly [long
 
 * **It is faster**. Based on the above modifications, the training is much faster. We report the training speed on NVIDIA TITAN Xp in the tables below.
 
-## Other Implementations
-
-* [Feature Pyramid Network (FPN)](https://github.com/jwyang/fpn.pytorch)
-
-* Mask R-CNN (~~ongoing~~ already implemented by [roytseng-tw](https://github.com/roytseng-tw/mask-rcnn.pytorch))
-
-## Tutorial 
-
-* [Blog](http://www.telesens.co/2018/03/11/object-detection-and-classification-using-r-cnns/) by [ankur6ue](https://github.com/ankur6ue)
 
 ## Benchmarking
 
@@ -82,6 +77,11 @@ Thanks to [Remi](https://github.com/Cadene) for providing the pretrained detecti
 * Click the links in the above tables to download our pre-trained faster r-cnn models.
 * If not mentioned, the GPU we used is NVIDIA Titan X Pascal (12GB).
 
+5) Underwood -pretrained model
+model     | #GPUs | batch size |lr        | lr_decay | max_epoch     |  time/epoch | mem/GPU | mAP 
+---------|--------|-----|--------|-----|-----|-------|--------|----- 
+[VGG-16](https://drive.google.com/open?id=1ywk9btHsFNYP_DoWVrCL6XDKapyb2ZEh)    | 1 P100 | 4    |1e-3| 1   | 100  |  ~12 hr    |1GB  | 6.2
+**Note**: This pretrained model is a pretrained faster_rcnn network, not just an vgg16 as below
 ### What we are going to do
 
 - [x] Support both python2 and python3 (great thanks to [cclauss](https://github.com/cclauss)).
@@ -116,6 +116,9 @@ cd faster-rcnn.pytorch && mkdir data
 
 * **Visual Genome**: Please follow the instructions in [bottom-up-attention](https://github.com/peteanderson80/bottom-up-attention) to prepare Visual Genome dataset. You need to download the images and object annotation files first, and then perform proprecessing to obtain the vocabulary and cleansed annotations based on the scripts provided in this repository.
 
+* **Underwood_dataset**: 
+If annotations are in bounding circles, there's is necessary to execute square_annot.py script that annotates in square bounding boxes and in a similiar format that VOC annotations
+
 ### Pretrained Model
 
 We used two pretrained models in our experiments, VGG and ResNet101. You can download these two models from:
@@ -128,11 +131,13 @@ Download them and put them into the data/pretrained_model/.
 
 **NOTE**. We compare the pretrained models from Pytorch and Caffe, and surprisingly find Caffe pretrained models have slightly better performance than Pytorch pretrained. We would suggest to use Caffe pretrained models from the above link to reproduce our results. 
 
+**NOTE**. That is not a faster-rcnn pretrained model, is just a pretrained VGG16 model to start to train "from scratch" the faster_rcnn part
+
 **If you want to use pytorch pre-trained models, please remember to transpose images from BGR to RGB, and also use the same data transformer (minus mean and normalize) as used in pretrained model.**
 
 ### Compilation
 
-As pointed out by [ruotianluo/pytorch-faster-rcnn](https://github.com/ruotianluo/pytorch-faster-rcnn), choose the right `-arch` in `make.sh` file, to compile the cuda code:
+As pointed out by [ruotianluo/pytorch-faster-rcnn](https://github.com/ruotianluo/pytorch-faster-rcnn), choose the right `-arch` in `lib/make.sh` file, to compile the cuda code:
 
   | GPU model  | Architecture |
   | ------------- | ------------- |
@@ -144,6 +149,11 @@ As pointed out by [ruotianluo/pytorch-faster-rcnn](https://github.com/ruotianluo
   
 More details about setting the architecture can be found [here](https://developer.nvidia.com/cuda-gpus) or [here](http://arnon.dk/matching-sm-architectures-arch-and-gencode-for-various-nvidia-cards/)
 
+For selecting the gpu architecture there are examples in makesh_examples/ so copy that as lib/make.sh
+
+Information of the GPUs architecture of the imatge server is at:
+[imatge.upc.edu information](https://imatge.upc.edu/trac/wiki/DevelopmentPlatform/HardwareResources)
+
 Install all the python dependencies using pip:
 ```
 pip install -r requirements.txt
@@ -153,55 +163,63 @@ Compile the cuda dependencies using following simple commands:
 
 ```
 cd lib
-sh make.sh
+srun --gres=gpu:pascal:1,gmem:6G --mem 12G sh make.sh
+or
+srun --gres=gpu:maxwell:1,gmem:6G --mem 12G sh make.sh
+
 ```
 
 It will compile all the modules you need, including NMS, ROI_Pooing, ROI_Align and ROI_Crop. The default version is compiled with Python 2.7, please compile by yourself if you are using a different python version.
 
-**As pointed out in this [issue](https://github.com/jwyang/faster-rcnn.pytorch/issues/16), if you encounter some error during the compilation, you might miss to export the CUDA paths to your environment.**
+**IMPORTANT NOTE** The srun --gres... until python script execution has to be the same of what used in compilation of make.sh
 
-## Train 
+## Train/val
+Before training set the directories where to load the pretrained VGG16 model (args.load_dir) and where to save the trained faster-rcnn model(args.save_dir)
+There are two ways of do the training and the validation steps:
+**First way: Train and validation separately**
+Train first executing the train_net.py and then run the val_net.py and select for the val_net.py where to load the trained faster-rcnn model. 
+To execute the train:
+```
+srun --gres:$architecture:1,gmem:6G --mem 30G -c 2 python train_net.py \
+              --dataset underwood --net vgg16 \
+              --bs $BATCH_SIZE --nw $WORKER_NUMBER \
+              --lr $LEARNING_RATE --lr_decay_step $DECAY_STEP \
+              --cuda
+```
+example:
+```
+srun --gres:$architecture:1,gmem:6G --mem 30G -c 2 python train_net.py \
+              --dataset underwood --net vgg16 \
+              --bs 4 --nw 2 \
+              --lr 1e-3 --lr_decay_step 1 \
+              --cuda
+```
+To execute the validation:
+```
+srun --gres:$architecture:1,gmem:6G --mem 30G -c 2 python val_net.py --dataset underwood --net vgg16 --cuda
+```
+**Second way: Train and validation jointly in the same script**
+Execute trainval to do the train and validation in the same script
+```
+srun --gres:$architecture:1,gmem:6G --mem 30G -c 2 python trainval_net.py \
+              --dataset underwood --net vgg16 \
+              --bs $BATCH_SIZE --nw $WORKER_NUMBER \
+              --lr $LEARNING_RATE --lr_decay_step $DECAY_STEP \
+              --cuda
+```
 
-Before training, set the right directory to save and load the trained models. Change the arguments "save_dir" and "load_dir" in trainval_net.py and test_net.py to adapt to your environment.
-
-To train a faster R-CNN model with vgg16 on pascal_voc, simply run:
-```
-CUDA_VISIBLE_DEVICES=$GPU_ID python trainval_net.py \
-                   --dataset pascal_voc --net vgg16 \
-                   --bs $BATCH_SIZE --nw $WORKER_NUMBER \
-                   --lr $LEARNING_RATE --lr_decay_step $DECAY_STEP \
-                   --cuda
-```
-where 'bs' is the batch size with default 1. Alternatively, to train with resnet101 on pascal_voc, simple run:
-```
- CUDA_VISIBLE_DEVICES=$GPU_ID python trainval_net.py \
-                    --dataset pascal_voc --net res101 \
-                    --bs $BATCH_SIZE --nw $WORKER_NUMBER \
-                    --lr $LEARNING_RATE --lr_decay_step $DECAY_STEP \
-                    --cuda
-```
-Above, BATCH_SIZE and WORKER_NUMBER can be set adaptively according to your GPU memory size. **On Titan Xp with 12G memory, it can be up to 4**.
-
-If you have multiple (say 8) Titan Xp GPUs, then just use them all! Try:
-```
-python trainval_net.py --dataset pascal_voc --net vgg16 \
-                       --bs 24 --nw 8 \
-                       --lr $LEARNING_RATE --lr_decay_step $DECAY_STEP \
-                       --cuda --mGPUs
-
-```
-
-Change dataset to "coco" or 'vg' if you want to train on COCO or Visual Genome.
+These scripts only computes loss
 
 ## Test
 
-If you want to evlauate the detection performance of a pre-trained vgg16 model on pascal_voc test set, simply run
+If you want to evlauate the detection performance of a pre-trained faster-rcnn model on underwood test set, simply run
 ```
-python test_net.py --dataset pascal_voc --net vgg16 \
-                   --checksession $SESSION --checkepoch $EPOCH --checkpoint $CHECKPOINT \
+srun --gres:$architecture:1,gmem:6G --mem 30G python test_net.py --dataset underwood --net vgg16 \
                    --cuda
 ```
-Specify the specific model session, chechepoch and checkpoint, e.g., SESSION=1, EPOCH=6, CHECKPOINT=416.
+This script only compute mean average precision
+You can manually modify the set to load (if test or validation) writing args.imdbvalnames or args.imdbtestnames on the call of combined_roidb(___)
+
 
 ## Demo
 
@@ -235,7 +253,8 @@ The demo is stopped by clicking the image window and then pressing the 'q' key.
 
 ## Authorship
 
-This project is equally contributed by [Jianwei Yang](https://github.com/jwyang) and [Jiasen Lu](https://github.com/jiasenlu), and many others (thanks to them!).
+This project is contributed by [Adrià Carbó](https://github.com/acarbo14) but is directly implemented over implementation of [Jianwei Yang](https://github.com/jwyang)
+
 
 ## Citation
 
