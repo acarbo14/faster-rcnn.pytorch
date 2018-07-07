@@ -96,13 +96,15 @@ model     | #GPUs | batch size |lr        | lr_decay | max_epoch     |  time/epo
 
 First of all, clone the code
 ```
-git clone https://github.com/jwyang/faster-rcnn.pytorch.git
+git clone https://github.com/imatge-upc/faster-rcnn.pytorch.git
 ```
 
 Then, create a folder:
 ```
 cd faster-rcnn.pytorch && mkdir data
 ```
+**NOTE:** You better crate the data dir on /work/user/ directory for space reasons
+In the data folder is where datasets and models must be stored
 
 ### prerequisites
 
