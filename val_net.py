@@ -59,7 +59,7 @@ def parse_args():
                       help='set config keys', default=None,
                       nargs=argparse.REMAINDER)
   parser.add_argument('--load_dir', dest='load_dir',
-                      help='directory to load models', default="data/in_training_models",
+                      help='directory to load models', default="/work/acarbo/faster_rcnn/data/underwood2_models",
                       type=str)
   parser.add_argument('--cuda', dest='cuda',
                       help='whether use CUDA',
@@ -117,6 +117,10 @@ if __name__ == '__main__':
       args.imdb_name = "voc_2007_trainval+voc_2012_trainval"
       args.imdbval_name = "voc_2007_test"
       args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
+  elif args.dataset == "underwood":
+      args.imdb_name = "train"
+      args.imdbval_name = "val"
+      args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50']
   elif args.dataset == "coco":
       args.imdb_name = "coco_2014_train+coco_2014_valminusminival"
       args.imdbval_name = "coco_2014_minival"
@@ -141,7 +145,10 @@ if __name__ == '__main__':
   pprint.pprint(cfg)
 
   cfg.TRAIN.USE_FLIPPED = False
-  imdb, roidb, ratio_list, ratio_index = combined_roidb(args.imdbval_name, False)
+  imdb, roidb, ratio_list, ratio_index = combined_roidb(args.imdbval_name)
+  #imdb, roidb, ratio_list, ratio_index = combined_roidb(args.imdbval_name)
+
+
   #imdb, roidb, ratio_list, ratio_index = combined_roidb(args.imdbval_name)
   #imdb.competition_mode(on=True)
 
@@ -168,7 +175,8 @@ if __name__ == '__main__':
 
   fasterRCNN.create_architecture()
 
-  files = sort_models("data/in_training_models/vgg16/pascal_voc/")
+  files = sort_models("/work/acarbo/faster_rcnn/data/underwood2_models/vgg16/underwood/")
+  print("Number of epochs",len(files))
   loss_final_save = torch.zeros(len(files))
   epoch = 0
   start = time.time()
@@ -218,10 +226,6 @@ if __name__ == '__main__':
         thresh = 0.0
 
     save_name = 'faster_rcnn_10'
-    num_images = len(imdb.image_index)
-    all_boxes = [[[] for _ in xrange(num_images)]
-                for _ in xrange(imdb.num_classes)]
-    output_dir = get_output_dir(imdb, save_name)
 
     #Modificacio meva training estava a false
     dataset = roibatchLoader(roidb, ratio_list, ratio_index, args.batch_size, \
@@ -229,8 +233,12 @@ if __name__ == '__main__':
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size,
                                 shuffle=False, num_workers=0,
                                 pin_memory=True)
-    data_iter = iter(dataloader)
-
+    #data_iter = iter(dataloader)
+    num_images = len(dataset)
+    all_boxes = [[[] for _ in xrange(num_images)]
+                for _ in xrange(imdb.num_classes)]
+    output_dir = get_output_dir(imdb, save_name)
+    
     _t = {'im_detect': time.time(), 'misc': time.time()}
     det_file = os.path.join(output_dir, 'detections.pkl')
 
@@ -238,10 +246,10 @@ if __name__ == '__main__':
     empty_array = np.transpose(np.array([[],[],[],[],[]]), (1,0))
 
     loss_temp = 0
-    loss_per_image = torch.zeros(num_images)
-    for i in range(num_images):
-
-      data = next(data_iter)
+    
+    
+    for i, data in enumerate(dataloader):
+    
       im_data.data.resize_(data[0].size()).copy_(data[0])
       im_info.data.resize_(data[1].size()).copy_(data[1])
       gt_boxes.data.resize_(data[2].size()).copy_(data[2])
@@ -252,105 +260,12 @@ if __name__ == '__main__':
       RCNN_loss_cls, RCNN_loss_bbox, \
       rois_label = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
 
-      '''scores = cls_prob.data
-      boxes = rois.data[:, :, 1:5]'''
-      """print(type(rpn_loss_cls))
-      print(type(rpn_loss_box))
-      print(type(RCNN_loss_cls))
-      print(type(RCNN_loss_bbox))"""
+      
       loss = rpn_loss_cls.mean() + rpn_loss_box.mean() \
-           + RCNN_loss_cls.mean() + RCNN_loss_bbox.mean()
+           + RCNN_loss_cls.mean() + RCNN_loss_bbox.mean()                   
+
+      loss_temp += loss.data[0]      
       
-      if i == 2:
-        dict_in_to_save = {
-        'im_data': im_data,
-        'im_info':im_info,
-        'gt_boxes':gt_boxes,
-        'num_boxes':num_boxes
-        }
-        dict_out_to_save = {
-        'rpn_loss_cls': rpn_loss_cls,
-        'rpn_loss_box': rpn_loss_box ,
-        'RCNN_loss_cls':RCNN_loss_cls,
-        'RCNN_loss_bbox':RCNN_loss_bbox
-        }
-        pickle.dump(dict_in_to_save, open('test_in.pkl','wb'))
-        pickle.dump(dict_out_to_save, open('test_out.pkl','wb'))
-        
-
-      
-      loss_temp += loss.data[0]
-      loss_per_image[i] = loss.data[0]
-
-
-      '''
-      if cfg.TEST.BBOX_REG:
-          # Apply bounding-box regression deltas
-          box_deltas = bbox_pred.data
-          if cfg.TRAIN.BBOX_NORMALIZE_TARGETS_PRECOMPUTED:
-          # Optionally normalize targets by a precomputed mean and stdev
-            if args.class_agnostic:
-                box_deltas = box_deltas.view(-1, 4) * torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_STDS).cuda() \
-                           + torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_MEANS).cuda()
-                box_deltas = box_deltas.view(1, -1, 4)
-            else:
-                box_deltas = box_deltas.view(-1, 4) * torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_STDS).cuda() \
-                           + torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_MEANS).cuda()
-                box_deltas = box_deltas.view(1, -1, 4 * len(imdb.classes))
-
-          pred_boxes = bbox_transform_inv(boxes, box_deltas, 1)
-          pred_boxes = clip_boxes(pred_boxes, im_info.data, 1)
-      else:
-          # Simply repeat the boxes, once for each class
-          pred_boxes = np.tile(boxes, (1, scores.shape[1]))
-      
-      pred_boxes /= data[1][0][2].cuda()
-
-      scores = scores.squeeze()
-      pred_boxes = pred_boxes.squeeze()
-      det_toc = time.time()
-      detect_time = det_toc - det_tic
-      misc_tic = time.time()
-      if vis:
-          im = cv2.imread(imdb.image_path_at(i))
-          im2show = np.copy(im)
-      for j in xrange(1, imdb.num_classes):
-          inds = torch.nonzero(scores[:,j]>thresh).view(-1)
-          # if there is det
-          if inds.numel() > 0:
-            cls_scores = scores[:,j][inds]
-            _, order = torch.sort(cls_scores, 0, True)
-            if args.class_agnostic:
-              cls_boxes = pred_boxes[inds, :]
-            else:
-              cls_boxes = pred_boxes[inds][:, j * 4:(j + 1) * 4]
-
-            cls_dets = torch.cat((cls_boxes, cls_scores.unsqueeze(1)), 1)
-            # cls_dets = torch.cat((cls_boxes, cls_scores), 1)
-            cls_dets = cls_dets[order]
-            keep = nms(cls_dets, cfg.TEST.NMS)
-            cls_dets = cls_dets[keep.view(-1).long()]
-            if vis:
-              im2show = vis_detections(im2show, imdb.classes[j], cls_dets.cpu().numpy(), 0.3)
-            all_boxes[j][i] = cls_dets.cpu().numpy()
-          else:
-            all_boxes[j][i] = empty_array
-            
-      # Limit to max_per_image detections *over all classes*
-      if max_per_image > 0:
-          image_scores = np.hstack([all_boxes[j][i][:, -1]
-                                    for j in xrange(1, imdb.num_classes)])
-          if len(image_scores) > max_per_image:
-              image_thresh = np.sort(image_scores)[-max_per_image]
-              for j in xrange(1, imdb.num_classes):
-                  keep = np.where(all_boxes[j][i][:, -1] >= image_thresh)[0]
-                  all_boxes[j][i] = all_boxes[j][i][keep, :]
-
-      misc_toc = time.time()
-      nms_time = misc_toc - misc_tic
-
-      print('im_detect: {:d}/{:d} {:.3f}s {:.3f}s   \r' \
-          .format(i + 1, num_images, detect_time, nms_time))'''
       sys.stdout.write('im_detect: {:d}/{:d} in epoch {:d} \r' \
           .format(i + 1, num_images, epoch+1))
       sys.stdout.flush()
@@ -361,29 +276,14 @@ if __name__ == '__main__':
           #cv2.imshow('test', im2show)
           #cv2.waitKey(0)
 
-    pickle.dump(loss_per_image,open('output_train/losses/losses per epoca '+str(epoch+1)+'.pkl','wb'))
+    
     loss_final_save[epoch] = loss_temp/num_images
     print('Loss a epoch {:d}: {:.3f}'.format(epoch+1,loss_final_save[epoch]))
     print(loss_final_save[epoch])
-    print(loss_final_save)
-    comprovacio = loss_per_image.mean()/num_images
-    if comprovacio == loss_final_save[epoch]:
-        print("Loss quadra!!")
-    else:
-        print("Loss no quadra!!")
-        print(comprovacio)
-        print(loss_final_save[epoch])
-    '''with open(det_file, 'wb') as f:
-        pickle.dump(all_boxes, f, pickle.HIGHEST_PROTOCOL)
-    print('Anem per aqui!!!!')
-    print('Evaluating detections')
-    imdb.evaluate_detections(all_boxes, output_dir)'''
-    print('Passat evaluate_detections!!!!')
-    
-    print('passat_temps time')
+    print(loss_final_save)   
     epoch = epoch + 1
   end = time.time()
   print("test time: %0.4fs" % (end - start))
 if not os.path.exists('output_train'):
   os.makedirs('output_train')
-pickle.dump(loss_final_save,open('output_train/test_loss.pkl','wb'))
+pickle.dump(loss_final_save,open('output_train_nou/val_loss.pkl','wb'))

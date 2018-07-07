@@ -18,6 +18,8 @@ import pickle
 from .imdb import imdb
 from .imdb import ROOT_DIR
 from . import ds_utils
+from .underwood_eval import voc_eval
+#from .voc_eval import voc_eval
 
 from model.utils.config import cfg
 
@@ -35,7 +37,7 @@ class underwood(imdb):
             else devkit_path
         self._data_path = os.path.join(self._devkit_path, 'apples')
         self._classes = ('__background__',  # always index 0
-                         'poma')
+                         'Poma')
         self._class_to_ind = dict(zip(self.classes, xrange(self.num_classes)))
         self._image_ext = '.png'
         self._image_index = self._load_image_set_index()
@@ -195,7 +197,7 @@ class underwood(imdb):
         
 
         ##----aqui no meu
-        filename = os.path.join(self._data_path, 'square_annotations', index + '.xml')
+        filename = os.path.join(self._data_path, 'square_annotations1', index + '.xml')
         tree = ET.parse(filename)
         objs = tree.findall('object')
         # if not self.config['use_diff']:
@@ -219,10 +221,10 @@ class underwood(imdb):
         for ix, obj in enumerate(objs):
             bbox = obj.find('bbox')
             # Make pixel indexes 0-based
-            x1 = float(bbox.find('xmin').text) 
-            y1 = float(bbox.find('ymin').text) 
-            x2 = float(bbox.find('xmax').text) 
-            y2 = float(bbox.find('ymax').text) 
+            x1 = float(bbox.find('xmin').text) - 1 
+            y1 = float(bbox.find('ymin').text) - 1
+            x2 = float(bbox.find('xmax').text) - 1
+            y2 = float(bbox.find('ymax').text) - 1
 
             diffc = obj.find('difficult')
             difficult = 0 if diffc == None else int(diffc.text)
@@ -251,7 +253,7 @@ class underwood(imdb):
     def _get_voc_results_file_template(self):
         # VOCdevkit/results/VOC2007/Main/<comp_id>_det_test_aeroplane.txt
         filename = self._get_comp_id() + '_det_' + self._image_set + '_{:s}.txt'
-        filedir = os.path.join(self._devkit_path, 'results', 'VOC' + self._year, 'Main')
+        filedir = os.path.join(self._devkit_path,'apples', 'results')
         if not os.path.exists(filedir):
             os.makedirs(filedir)
         path = os.path.join(filedir, filename)
@@ -265,6 +267,7 @@ class underwood(imdb):
             filename = self._get_voc_results_file_template().format(cls)
             with open(filename, 'wt') as f:
                 for im_ind, index in enumerate(self.image_index):
+                    
                     dets = all_boxes[cls_ind][im_ind]
                     if dets == []:
                         continue
@@ -277,30 +280,22 @@ class underwood(imdb):
 
     def _do_python_eval(self, output_dir='output'):
         annopath = os.path.join(
-            self._devkit_path,
-            'VOC' + self._year,
-            'Annotations',
+            self._devkit_path, 'apples', 'square_annotations1',
             '{:s}.xml')
+
         imagesetfile = os.path.join(
-            self._devkit_path,
-            'VOC' + self._year,
-            'ImageSets',
-            'Main',
-            self._image_set + '.txt')
+            self._devkit_path, 'apples', 'sets', self._image_set + '.txt')
         cachedir = os.path.join(self._devkit_path, 'annotations_cache')
         aps = []
-        # The PASCAL VOC metric changed in 2010
-        use_07_metric = True if int(self._year) < 2010 else False
-        print('VOC07 metric? ' + ('Yes' if use_07_metric else 'No'))
+        
         if not os.path.isdir(output_dir):
             os.mkdir(output_dir)
         for i, cls in enumerate(self._classes):
             if cls == '__background__':
                 continue
             filename = self._get_voc_results_file_template().format(cls)
-            rec, prec, ap = voc_eval(
-                filename, annopath, imagesetfile, cls, cachedir, ovthresh=0.5,
-                use_07_metric=use_07_metric)
+            rec, prec, ap = voc_eval(filename, annopath, imagesetfile, self._image_index, cls, cachedir, ovthresh=0.2)
+            #rec, prec, ap = voc_eval(filename, annopath, imagesetfile, cls, cachedir, ovthresh=0.2)
             aps += [ap]
             print('AP for {} = {:.4f}'.format(cls, ap))
             with open(os.path.join(output_dir, cls + '_pr.pkl'), 'wb') as f:
@@ -337,7 +332,16 @@ class underwood(imdb):
         print('Running:\n{}'.format(cmd))
         status = subprocess.call(cmd, shell=True)
 
-    def evaluate_detections(self, all_boxes, output_dir):
+    def _no_label_index(self, ratio_index):
+        new_index = []
+        for idx, im_ind in enumerate(self.image_index):
+            if idx in ratio_index:                
+                new_index.append(im_ind)
+        return new_index
+    def evaluate_detections(self, all_boxes, output_dir, ratio_index, no_label = False):
+        if no_label:
+            self._image_index = self._no_label_index(ratio_index)
+        
         self._write_voc_results_file(all_boxes)
         meanAP = self._do_python_eval(output_dir)
         if self.config['matlab_eval']:
@@ -356,6 +360,9 @@ class underwood(imdb):
         else:
             self.config['use_salt'] = True
             self.config['cleanup'] = True
+
+
+    
 
 
 if __name__ == '__main__':

@@ -51,7 +51,7 @@ def parse_args():
                       default=1, type=int)
   parser.add_argument('--epochs', dest='max_epochs',
                       help='number of epochs to train',
-                      default=20, type=int)
+                      default=45, type=int)
   parser.add_argument('--disp_interval', dest='disp_interval',
                       help='number of iterations to display',
                       default=100, type=int)
@@ -60,7 +60,7 @@ def parse_args():
                       default=10000, type=int)
 
   parser.add_argument('--save_dir', dest='save_dir',
-                      help='directory to save models', default="./data/in_training_models_with_loss_v2",
+                      help='directory to save models', default="/work/acarbo/faster_rcnn/data/underwood2_models",
                       nargs=argparse.REMAINDER)
   parser.add_argument('--nw', dest='num_workers',
                       help='number of worker to load data',
@@ -167,6 +167,10 @@ if __name__ == '__main__':
       args.imdb_name = "voc_2007_trainval+voc_2012_trainval"
       args.imdbval_name = "voc_2007_test"
       args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
+  elif args.dataset == "underwood":
+      args.imdb_name = "train"
+      args.imdbval_name = "val"
+      args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50']
   elif args.dataset == "coco":
       args.imdb_name = "coco_2014_train+coco_2014_valminusminival"
       args.imdbval_name = "coco_2014_minival"
@@ -316,35 +320,15 @@ if __name__ == '__main__':
       im_info.data.resize_(data[1].size()).copy_(data[1])
       gt_boxes.data.resize_(data[2].size()).copy_(data[2])
       num_boxes.data.resize_(data[3].size()).copy_(data[3])
-      print('Im data')
-      print(im_data.size())
-      print('Im info')
-      print(im_info.size())
-      print('gt_boxes')
-      print(gt_boxes.size())
-      print('num_boxes')
-      print(num_boxes.size())
+      
       fasterRCNN.zero_grad()
       rois, cls_prob, bbox_pred, \
       rpn_loss_cls, rpn_loss_box, \
       RCNN_loss_cls, RCNN_loss_bbox, \
       rois_label = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
 
-      dict_in_to_save = {
-        'im_data': im_data,
-        'im_info':im_info,
-        'gt_boxes':gt_boxes,
-        'num_boxes':num_boxes
-      }
-      dict_out_to_save = {
-        'rpn_loss_cls': rpn_loss_cls,
-        'rpn_loss_box': rpn_loss_box ,
-        'RCNN_loss_cls':RCNN_loss_cls,
-        'RCNN_loss_bbox':RCNN_loss_bbox
-      }
-      if step == 2:
-        pickle.dump(dict_in_to_save, open('train_in.pkl','wb'))
-        pickle.dump(dict_out_to_save, open('train_out.pkl','wb'))
+      
+
 
       loss = rpn_loss_cls.mean() + rpn_loss_box.mean() \
            + RCNN_loss_cls.mean() + RCNN_loss_bbox.mean()
@@ -425,6 +409,6 @@ if __name__ == '__main__':
     end = time.time()
     print(end - start)
   #Guardem el loss per epoques
-  if not os.path.exists('output_train'):
-    os.makedirs('output_train')
-  pickle.dump(train_loss_epoch,open('output_train/train_loss_v2.pkl','wb'))
+  if not os.path.exists('output_train_nou'):
+    os.makedirs('output_train_nou')
+  pickle.dump(train_loss_epoch,open('output_train_nou/train_loss.pkl','wb'))
