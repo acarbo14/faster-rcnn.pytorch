@@ -83,7 +83,7 @@ model     | #GPUs | batch size |lr        | lr_decay | max_epoch     |  time/epo
 ---------|--------|-----|--------|-----|-----|-------|--------|----- 
 [VGG-16](https://drive.google.com/open?id=1ywk9btHsFNYP_DoWVrCL6XDKapyb2ZEh)    | 1 P100 | 4    |1e-3| 1   | 100  |  ~12 hr    |1GB  | 6.2
 
-**Note**: This pretrained model is a pretrained faster_rcnn network, not just an vgg16 as below
+**Note**: This pretrained model is a pretrained faster_rcnn network, not just an vgg16 as below in pretrained models section
 ### What we are going to do
 
 - [x] Support both python2 and python3 (great thanks to [cclauss](https://github.com/cclauss)).
@@ -205,10 +205,13 @@ srun --gres:$architecture:1,gmem:6G --mem 30G -c 2 python train_net.py \
               --lr 1e-3 --lr_decay_step 1 \
               --cuda
 ```
+**Note** The train_net.py will load vgg16 pretrained model, not faster_rcnn model
+
 To execute the validation:
 ```
 srun --gres:$architecture:1,gmem:6G --mem 30G -c 2 python val_net.py --dataset underwood --net vgg16 --cuda
 ```
+**Note** Thre val_net.py will load faster_rcnn trained model
 **Second way: Train and validation jointly in the same script**
 
 Execute trainval to do the train and validation in the same script
