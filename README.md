@@ -77,10 +77,11 @@ Thanks to [Remi](https://github.com/Cadene) for providing the pretrained detecti
 * Click the links in the above tables to download our pre-trained faster r-cnn models.
 * If not mentioned, the GPU we used is NVIDIA Titan X Pascal (12GB).
 
-5) Underwood -pretrained model
+5). Underwood -pretrained model
 model     | #GPUs | batch size |lr        | lr_decay | max_epoch     |  time/epoch | mem/GPU | mAP 
 ---------|--------|-----|--------|-----|-----|-------|--------|----- 
 [VGG-16](https://drive.google.com/open?id=1ywk9btHsFNYP_DoWVrCL6XDKapyb2ZEh)    | 1 P100 | 4    |1e-3| 1   | 100  |  ~12 hr    |1GB  | 6.2
+
 **Note**: This pretrained model is a pretrained faster_rcnn network, not just an vgg16 as below
 ### What we are going to do
 
