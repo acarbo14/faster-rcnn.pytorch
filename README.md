@@ -104,6 +104,7 @@ Then, create a folder:
 cd faster-rcnn.pytorch && mkdir data
 ```
 **NOTE:** You better crate the data dir on /work/user/ directory for space reasons
+
 In the data folder is where datasets and models must be stored
 
 ### prerequisites
@@ -178,11 +179,17 @@ It will compile all the modules you need, including NMS, ROI_Pooing, ROI_Align a
 **IMPORTANT NOTE** The srun --gres... until python script execution has to be the same of what used in compilation of make.sh
 
 ## Train/val
+
 Before training set the directories where to load the pretrained VGG16 model (args.load_dir) and where to save the trained faster-rcnn model(args.save_dir)
+
 There are two ways of do the training and the validation steps:
+
 **First way: Train and validation separately**
+
 Train first executing the train_net.py and then run the val_net.py and select for the val_net.py where to load the trained faster-rcnn model. 
+
 To execute the train:
+
 ```
 srun --gres:$architecture:1,gmem:6G --mem 30G -c 2 python train_net.py \
               --dataset underwood --net vgg16 \
@@ -203,6 +210,7 @@ To execute the validation:
 srun --gres:$architecture:1,gmem:6G --mem 30G -c 2 python val_net.py --dataset underwood --net vgg16 --cuda
 ```
 **Second way: Train and validation jointly in the same script**
+
 Execute trainval to do the train and validation in the same script
 ```
 srun --gres:$architecture:1,gmem:6G --mem 30G -c 2 python trainval_net.py \
@@ -212,7 +220,7 @@ srun --gres:$architecture:1,gmem:6G --mem 30G -c 2 python trainval_net.py \
               --cuda
 ```
 
-These scripts only computes loss
+These scripts only compute the loss
 
 ## Test
 
@@ -221,7 +229,8 @@ If you want to evlauate the detection performance of a pre-trained faster-rcnn m
 srun --gres:$architecture:1,gmem:6G --mem 30G python test_net.py --dataset underwood --net vgg16 \
                    --cuda
 ```
-This script only compute mean average precision
+This script only computes mean average precision
+
 You can manually modify the set to load (if test or validation) writing args.imdbvalnames or args.imdbtestnames on the call of combined_roidb(___)
 
 
@@ -243,17 +252,6 @@ Below are some detection results:
 <div style="color:#0000FF" align="center">
 <img src="images/img3_det_res101.jpg" width="430"/> <img src="images/img4_det_res101.jpg" width="430"/>
 </div>
-
-## Webcam Demo
-
-You can use a webcam in a real-time demo by running
-```
-python demo.py --net vgg16 \
-               --checksession $SESSION --checkepoch $EPOCH --checkpoint $CHECKPOINT \
-               --cuda --load_dir path/to/model/directoy \
-               --webcam $WEBCAM_ID
-```
-The demo is stopped by clicking the image window and then pressing the 'q' key.
 
 ## Authorship
 
