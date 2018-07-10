@@ -303,7 +303,7 @@ __C.CUDA = False
 __C.CROP_RESIZE_WITH_MAX_POOL = True
 
 import pdb
-def get_output_dir(imdb, weights_filename):
+def get_output_dir(imdb, weights_filename, epoch = 0):
   """Return the directory where experimental artifacts are placed.
   If the directory does not exist, it is created.
 
@@ -313,7 +313,7 @@ def get_output_dir(imdb, weights_filename):
   outdir = osp.abspath(osp.join(__C.ROOT_DIR, 'output', __C.EXP_DIR, imdb.name))
   if weights_filename is None:
     weights_filename = 'default'
-  outdir = osp.join(outdir, weights_filename)
+  outdir = osp.join(outdir, weights_filename + '_epoch_{:d}').format(epoch + 1)
   if not os.path.exists(outdir):
     os.makedirs(outdir)
   return outdir

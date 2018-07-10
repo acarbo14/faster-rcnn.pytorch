@@ -14,7 +14,7 @@ __sets = {}
 from datasets.pascal_voc import pascal_voc
 from datasets.coco import coco
 from datasets.imagenet import imagenet
-from datasets.underwood import underwood
+from datasets.underwood2 import underwood
 from datasets.vg import vg
 
 import numpy as np
