@@ -15,6 +15,7 @@ import scipy.io as sio
 import xml.etree.ElementTree as ET
 import pandas as pd
 import pickle
+from .config_paths import PATHS as phh
 from .imdb import imdb
 from .imdb import ROOT_DIR
 from . import ds_utils
@@ -197,7 +198,7 @@ class underwood(imdb):
         
 
         ##----aqui no meu
-        filename = os.path.join(self._data_path, 'square_annotations1', index + '.xml')
+        filename = os.path.join(phh.load_gt_box_dir, index + '.xml')
         tree = ET.parse(filename)
         objs = tree.findall('object')
         # if not self.config['use_diff']:
@@ -230,7 +231,7 @@ class underwood(imdb):
             difficult = 0 if diffc == None else int(diffc.text)
             ishards[ix] = difficult
 
-            cls = self._class_to_ind[obj.find('name').text.lower().strip()]
+            cls = self._class_to_ind[obj.find('name').text.strip()]
             boxes[ix, :] = [x1, y1, x2, y2]
             gt_classes[ix] = cls
             overlaps[ix, cls] = 1.0
@@ -253,7 +254,7 @@ class underwood(imdb):
     def _get_voc_results_file_template(self):
         # VOCdevkit/results/VOC2007/Main/<comp_id>_det_test_aeroplane.txt
         filename = self._get_comp_id() + '_det_' + self._image_set + '_{:s}.txt'
-        filedir = os.path.join(self._devkit_path,'apples', 'results')
+        filedir = os.path.join(self._devkit_path,'apples', 'results_voc_eval')
         if not os.path.exists(filedir):
             os.makedirs(filedir)
         path = os.path.join(filedir, filename)
@@ -279,8 +280,7 @@ class underwood(imdb):
                                        dets[k, 2] + 1, dets[k, 3] + 1))
 
     def _do_python_eval(self, output_dir='output'):
-        annopath = os.path.join(
-            self._devkit_path, 'apples', 'square_annotations1',
+        annopath = os.path.join(phh.load_gt_box_dir,
             '{:s}.xml')
 
         imagesetfile = os.path.join(
@@ -294,8 +294,8 @@ class underwood(imdb):
             if cls == '__background__':
                 continue
             filename = self._get_voc_results_file_template().format(cls)
-            rec, prec, ap = voc_eval(filename, annopath, imagesetfile, self._image_index, cls, cachedir, ovthresh=0.2)
-            #rec, prec, ap = voc_eval(filename, annopath, imagesetfile, cls, cachedir, ovthresh=0.2)
+            #rec, prec, ap = voc_eval(filename, annopath, imagesetfile, self._image_index, cls, cachedir, ovthresh=0.2)
+            rec, prec, ap = voc_eval(filename, annopath, imagesetfile, cls, cachedir, ovthresh=0.5)
             aps += [ap]
             print('AP for {} = {:.4f}'.format(cls, ap))
             with open(os.path.join(output_dir, cls + '_pr.pkl'), 'wb') as f:
@@ -338,9 +338,8 @@ class underwood(imdb):
             if idx in ratio_index:                
                 new_index.append(im_ind)
         return new_index
-    def evaluate_detections(self, all_boxes, output_dir, ratio_index, no_label = False):
-        if no_label:
-            self._image_index = self._no_label_index(ratio_index)
+    def evaluate_detections(self, all_boxes, output_dir):
+        
         
         self._write_voc_results_file(all_boxes)
         meanAP = self._do_python_eval(output_dir)

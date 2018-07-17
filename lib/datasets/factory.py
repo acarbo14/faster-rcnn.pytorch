@@ -14,7 +14,7 @@ __sets = {}
 from datasets.pascal_voc import pascal_voc
 from datasets.coco import coco
 from datasets.imagenet import imagenet
-from datasets.underwood2 import underwood
+from datasets.underwood import underwood
 from datasets.vg import vg
 
 import numpy as np
@@ -26,7 +26,7 @@ for year in ['2007', '2012']:
     __sets[name] = (lambda split=split, year=year: pascal_voc(split, year))
 
 # Set up underwood
-for split in ['all', 'test', 'train', 'train_val', 'val']:
+for split in ['all', 'test', 'train', 'train_val', 'val', 'val_all_with_labels']:
   name = split
   __sets[name] = (lambda split=split: underwood(split))
 

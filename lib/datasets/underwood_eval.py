@@ -31,7 +31,7 @@ def parse_rec(filename):
 
   return objects
 
-#Normalment esta a false el use_07..
+
 def voc_ap(rec, prec, use_07_metric=False):
   """ ap = voc_ap(rec, prec, [use_07_metric])
   Compute VOC AP given precision and recall.
@@ -68,10 +68,10 @@ def voc_ap(rec, prec, use_07_metric=False):
 
 def voc_eval(detpath,
              annopath,
-             imagesetfile,image_index,
+             imagesetfile,
              classname,
              cachedir,
-             ovthresh=0.2,
+             ovthresh=0.5,
              use_07_metric=False):
   """rec, prec, ap = voc_eval(detpath,
                               annopath,
@@ -101,22 +101,17 @@ def voc_eval(detpath,
   # first load gt
   if not os.path.isdir(cachedir):
     os.mkdir(cachedir)
-  
-
   cachefile = os.path.join(cachedir, '%s_annots.pkl' % imagesetfile)
-  print(cachefile )
   # read list of images
   with open(imagesetfile, 'r') as f:
     lines = f.readlines()
+  imagenames = [x.strip() for x in lines]
 
-  #imagenames = [x.strip() for x in lines]
-  imagenames = image_index
-  
   if not os.path.isfile(cachefile):
     # load annotations
-    print(annopath)
     recs = {}
     for i, imagename in enumerate(imagenames):
+      print(annopath.format(imagename))
       recs[imagename] = parse_rec(annopath.format(imagename))
       if i % 100 == 0:
         print('Reading annotation for {:d}/{:d}'.format(
@@ -126,7 +121,6 @@ def voc_eval(detpath,
     with open(cachefile, 'wb') as f:
       pickle.dump(recs, f)
   else:
-    
     # load
     with open(cachefile, 'rb') as f:
       try:
@@ -135,21 +129,14 @@ def voc_eval(detpath,
         recs = pickle.load(f, encoding='bytes')
 
   # extract gt objects for this class
-  print("Len recs: ",len(recs))
-
   class_recs = {}
   npos = 0
   for imagename in imagenames:
     R = [obj for obj in recs[imagename] if obj['name'] == classname]
-    
     bbox = np.array([x['bbox'] for x in R])
-    
     difficult = np.array([x['difficult'] for x in R]).astype(np.bool)
-    #difficult = np.array([0 for x in R]).astype(np.bool)
-    
     det = [False] * len(R)
     npos = npos + sum(~difficult)
-    
     class_recs[imagename] = {'bbox': bbox,
                              'difficult': difficult,
                              'det': det}
@@ -215,7 +202,6 @@ def voc_eval(detpath,
   # compute precision recall
   fp = np.cumsum(fp)
   tp = np.cumsum(tp)
-  
   rec = tp / float(npos)
   # avoid divide by zero in case the first detection matches a difficult
   # ground truth

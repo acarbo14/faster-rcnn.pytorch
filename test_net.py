@@ -27,9 +27,10 @@ from model.utils.config import cfg, cfg_from_file, cfg_from_list, get_output_dir
 from model.rpn.bbox_transform import clip_boxes
 from model.nms.nms_wrapper import nms
 from model.rpn.bbox_transform import bbox_transform_inv
-from model.utils.net_utils import save_net, load_net, vis_detections
+from model.utils.net_utils import save_net, load_net, vis_detections, im_detections
 from model.faster_rcnn.vgg16 import vgg16
 from model.faster_rcnn.resnet import resnet
+from datasets.config_paths import PATHS as phh
 from sorting_models import sort_models
 
 import pdb
@@ -58,7 +59,7 @@ def parse_args():
                       help='set config keys', default=None,
                       nargs=argparse.REMAINDER)
   parser.add_argument('--load_dir', dest='load_dir',
-                      help='directory to load models', default="/work/acarbo/faster_rcnn/data/underwood3_models",
+                      help='directory to load models', default=phh.load_models_dir,
                       type=str)
   parser.add_argument('--cuda', dest='cuda',
                       help='whether use CUDA',
@@ -100,10 +101,8 @@ weight_decay = cfg.TRAIN.WEIGHT_DECAY
 if __name__ == '__main__':
     
   args = parse_args()
-  filter_no_labels = True
-  if args.dataset == "underwood":
-    args.load_dir = "/work/acarbo/faster_rcnn/data/underwood3_models"
-  elif args.dataset == "pascal_voc":
+  filter_no_labels = False
+  if args.dataset == "pascal_voc":
     args.load_dir = "/work/acarbo/faster_rcnn/data/in_training_models"
 
   print('Called with args:')
@@ -125,7 +124,7 @@ if __name__ == '__main__':
       args.imdb_name = "train"
       args.imdbval_name = "val"
       args.imdbtest_name = "test"
-      args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50']
+      args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
   elif args.dataset == "coco":
       args.imdb_name = "coco_2014_train+coco_2014_valminusminival"
       args.imdbval_name = "coco_2014_minival"
@@ -159,8 +158,11 @@ if __name__ == '__main__':
   pprint.pprint(cfg)
 
   cfg.TRAIN.USE_FLIPPED = False
-  imdb, roidb, ratio_list, ratio_index = combined_roidb(args.imdbval_name, training = filter_no_labels)  #Si training esta a true es treuen imatges sense labels (es filtren)
+  imdb, roidb, ratio_list, ratio_index = combined_roidb(args.imdbtest_name, training = filter_no_labels)  #Si training esta a true es treuen imatges sense labels (es filtren)
+  
   imdb.competition_mode(on=True)
+  #image_index = imdb.image_ind(ratio_index,no_label = filter_no_labels)
+
   
   pickle.dump(ratio_index,open('proves/ratio_index.pkl','wb'))
 
@@ -214,6 +216,10 @@ if __name__ == '__main__':
   print(meanAP_epoch)
   
   for file in files:
+    
+    file = files[13]  
+    if epoch == 1:
+      break
     load_dir = os.path.join(input_dir,file)
     print("load checkpoint %s" % (load_dir))
     checkpoint = torch.load(load_dir)
@@ -236,34 +242,41 @@ if __name__ == '__main__':
 
     if vis:
       thresh = 0.05
+      print("Amb vis")
     else:
       thresh = 0.0
+      print("Sense vis")
 
     save_name = 'faster_rcnn_10'
     
     
 
-    output_dir = get_output_dir(imdb, save_name)
+    output_dir = get_output_dir(imdb, save_name, epoch)
+    print(output_dir)
     dataset = roibatchLoader(roidb, ratio_list, ratio_index, args.batch_size, \
                           imdb.num_classes, training=False, normalize = False)
     num_images = len(dataset)
+
     all_boxes = [[[] for _ in xrange(num_images)]
                  for _ in xrange(imdb.num_classes)]
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size,
                               shuffle=False, num_workers=0,
                               pin_memory=True)
 
+    
+
     data_iter = iter(dataloader)
 
     _t = {'im_detect': time.time(), 'misc': time.time()}
     det_file = os.path.join(output_dir, 'detections.pkl')
+    print(det_file)
     print("Numbero_imgs: ", num_images)
     print("Numero_class: ", imdb.num_classes)
     fasterRCNN.eval()
     empty_array = np.transpose(np.array([[],[],[],[],[]]), (1,0))
-    for i in range(num_images):
+    for i, im in enumerate(dataloader):
         
-        data = next(data_iter)
+        data = im
         im_data.data.resize_(data[0].size()).copy_(data[0])
         im_info.data.resize_(data[1].size()).copy_(data[1])
         gt_boxes.data.resize_(data[2].size()).copy_(data[2])
@@ -340,6 +353,15 @@ if __name__ == '__main__':
                     keep = np.where(all_boxes[j][i][:, -1] >= image_thresh)[0]
                     all_boxes[j][i] = all_boxes[j][i][keep, :]
 
+        '''detections = im_detections(cls_dets.cpu().numpy(), 0.5)
+        save_pkl_det_dir = phh.save_results_dir + '/Epoch_{:d}'.format(epoch + 1)
+        if not os.path.isdir(phh.save_results_dir):          
+          os.mkdir(phh.save_results_dir)
+        if not os.path.isdir(save_pkl_det_dir):
+          os.mkdir(save_pkl_det_dir)
+        pickle.dump(detections,open(os.path.join(save_pkl_det_dir,img_indx[i] + '.pkl'),'wb'))'''
+        
+
         misc_toc = time.time()
         nms_time = misc_toc - misc_tic
 
@@ -352,7 +374,9 @@ if __name__ == '__main__':
             pdb.set_trace()
             #cv2.imshow('test', im2show)
             #cv2.waitKey(0)
-
+        
+    
+    
     with open(det_file, 'wb') as f:
         pickle.dump(all_boxes, f, pickle.HIGHEST_PROTOCOL)
 
@@ -363,15 +387,11 @@ if __name__ == '__main__':
     pickle.dump(all_boxes,open('output_test/all_boxes_'+args.dataset+'.pkl','wb'))
     print('Evaluating detections')    
     #for VOC
-    if args.dataset == "pascal_voc":
-      meanAP_epoch[epoch] = imdb.evaluate_detections(all_boxes, output_dir)
-    #for underwood
-    elif args.dataset == "underwood":
-      meanAP_epoch[epoch] = imdb.evaluate_detections(all_boxes, output_dir, ratio_index, no_label = filter_no_labels)
+    
+    meanAP_epoch[epoch] = imdb.evaluate_detections(all_boxes, output_dir)
     
     print("End of epoch {}".format(epoch + 1))
-    if epoch == 0:
-      pickle.dump(meanAP_epoch, open('output/meanAP_epoch_'+str(epoch+1)+'.pkl','wb'),pickle.HIGHEST_PROTOCOL)
+    
     epoch = epoch + 1
     print("Start of epoch {}".format(epoch + 1))
     end = time.time()

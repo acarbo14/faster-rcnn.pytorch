@@ -20,9 +20,11 @@ from .imdb import imdb
 from .imdb import ROOT_DIR
 from . import ds_utils
 from .underwood_eval import voc_eval
+
 #from .voc_eval import voc_eval
 
 from model.utils.config import cfg
+from datasets.config_paths import PATHS as phh
 
 try:
     xrange          # Python 2
@@ -198,7 +200,7 @@ class underwood(imdb):
         
 
         ##----aqui no meu
-        filename = os.path.join(self._data_path, 'square_annot', index + '.xml')
+        filename = os.path.join(phh.load_gt_box_dir, index + '.xml')
         tree = ET.parse(filename)
         objs = tree.findall('object')
         # if not self.config['use_diff']:
@@ -254,7 +256,7 @@ class underwood(imdb):
     def get_underwood_results_file_template(self, epoch):
         # VOCdevkit/results/VOC2007/Main/<comp_id>_det_test_aeroplane.txt
         filename = '{:s}.txt'
-        filedir = os.path.join(self._devkit_path,'apples', 'results', 'Epoch_{:s}'.format(str(epoch + 1)))
+        filedir = os.path.join(phh.save_results_dir, 'Epoch_{:s}'.format(str(epoch + 1)))
         if not os.path.exists(filedir):
             os.makedirs(filedir)
         
@@ -266,7 +268,7 @@ class underwood(imdb):
         for cls_ind, cls in enumerate(self.classes):
             if cls == '__background__':
                 continue
-            print('Writing {} underwood results file'.format(cls))
+            #print('Writing {} underwood results file'.format(cls))
             
             filename = self.get_underwood_results_file_template(epoch).format(im)            
             with open(filename, 'wt') as f:
@@ -275,19 +277,22 @@ class underwood(imdb):
                 dets = all_boxes
                 if dets == []:
                     continue
-                
-                
-                # the VOCdevkit expects 1-based indices
-                for k in xrange(dets.shape[0]):
-                    if dets[k,-1] >= 0.05:
-                        f.write('{:s} {:.3f} {:.1f} {:.1f} {:.1f} {:.1f}\n'.
-                                format('Poma', dets[k, -1],
-                                       dets[k, 0] + 1, dets[k, 1] + 1,
-                                       dets[k, 2] + 1, dets[k, 3] + 1))
+                for k in range(np.minimum(10, dets.shape[0])):
+                    bbox = np.array([int(np.round(x)) for x in dets[k, :4]])
+                    score = dets[k, -1]
+                    if score > 0.5:                
+                        '''f.write('{:s} {:.3f} {:.1f} {:.1f} {:.1f} {:.1f}\n'.
+                                format(cls, dets[k, -1],
+                                       bbox[k, 0] + 1, bbox[k, 1] + 1,
+                                       bbox[k, 2] + 1, bbox[k, 3] + 1))'''
+                        
+                        f.write('{:s} {:.3f} {:d} {:d} {:d} {:d}\n'.
+                                format(cls, dets[k, -1],
+                                       bbox[0], bbox[1],
+                                       bbox[2], bbox[3]))
 
     def _do_python_eval(self, epoch, output_dir='output'):
-        annopath = os.path.join(
-            self._devkit_path, 'apples', 'square_annot',
+        annopath = os.path.join(PATHS,
             '{:s}.xml')
 
         imagesetfile = os.path.join(
@@ -342,14 +347,17 @@ class underwood(imdb):
 
     def _no_label_index(self, ratio_index):
         new_index = []
-        for idx, im_ind in enumerate(self.image_index):
+        for idx, im_ind in enumerate(ratio_index):
+            new_index.append(self._image_index[im_ind])
+        '''for idx, im_ind in enumerate(self.image_index):
             if idx in ratio_index:                
-                new_index.append(im_ind)
+                new_index.append(im_ind)'''
         return new_index
     def evaluate_detections(self, all_boxes, output_dir, epoch, i, ratio_index, no_label = False):
+        '''if no_label and i == 0 and epoch == 0:
+            self._image_index = self._no_label_index(ratio_index)'''
         if no_label:
-            self._image_index = self._no_label_index(ratio_index)
-        
+            img_index = self._no_label_index(ratio_index)
         self.write_underwood_results_file(all_boxes, epoch, self._image_index[i])
         '''print(self._image_index)
         meanAP = self._do_python_eval(epoch, output_dir)
@@ -362,6 +370,10 @@ class underwood(imdb):
                 filename = self.get_underwood_results_file_template().format(str(epoch + 1), cls)
                 os.remove(filename)
         return meanAP'''
+    '''def image_ind(self, ratio_index,no_label = False):
+        if no_label:
+            self._image_index = self._no_label_index(ratio_index)
+        return self._image_index'''
     def competition_mode(self, on):
         if on:
             self.config['use_salt'] = False

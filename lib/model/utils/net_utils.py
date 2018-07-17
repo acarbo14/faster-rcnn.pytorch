@@ -63,6 +63,15 @@ def vis_detections(im, class_name, dets, thresh=0.8):
                         1.0, (0, 0, 255), thickness=1)
     return im
 
+def im_detections(dets,thresh = 0.8):
+    detections = np.zeros((np.minimum(10, dets.shape[0]),4))
+    for i in range(np.minimum(10, dets.shape[0])):
+        bbox = tuple(int(np.round(x)) for x in dets[i, :4])
+        score = dets[i, -1]
+        if score > thresh:
+            detections[i,:] = bbox
+    return detections 
+
 
 def adjust_learning_rate(optimizer, decay=0.1):
     """Sets the learning rate to the initial LR decayed by 0.5 every 20 epochs"""

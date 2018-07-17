@@ -34,7 +34,7 @@ from model.utils.net_utils import weights_normal_init, save_net, load_net, \
 
 from model.faster_rcnn.vgg16 import vgg16
 from model.faster_rcnn.resnet import resnet
-
+from model.utils.config_paths import PATHS as phh
 def parse_args():
   """
   Parse input arguments
@@ -51,7 +51,7 @@ def parse_args():
                       default=1, type=int)
   parser.add_argument('--epochs', dest='max_epochs',
                       help='number of epochs to train',
-                      default=100, type=int)
+                      default=30, type=int)
   parser.add_argument('--disp_interval', dest='disp_interval',
                       help='number of iterations to display',
                       default=100, type=int)
@@ -60,7 +60,7 @@ def parse_args():
                       default=10000, type=int)
 
   parser.add_argument('--save_dir', dest='save_dir',
-                      help='directory to save models', default="/work/acarbo/faster_rcnn/data/underwood3_models",
+                      help='directory to save models', default=phh.load_models_dir,
                       nargs=argparse.REMAINDER)
   parser.add_argument('--nw', dest='num_workers',
                       help='number of worker to load data',
@@ -344,6 +344,8 @@ if __name__ == '__main__':
   print(iters_per_epoch['train'])
   print(iters_per_epoch['val'])
   print("Fins aqui prou be")
+
+
   loss_train = torch.zeros(args.max_epochs)
   loss_val = torch.zeros(args.max_epochs)
   for epoch in range(args.start_epoch, args.max_epochs + 1):
@@ -351,7 +353,17 @@ if __name__ == '__main__':
     fasterRCNN.train()
     loss_temp = 0
     start = time.time()
-
+    if epoch == args.start_epoch:
+      save_name = os.path.join(output_dir, 'faster_rcnn_{}_{}_{}.pth'.format(args.session, 0, iters_per_epoch['train']-1))
+      save_checkpoint({
+        'session': args.session,
+        'epoch': epoch + 1, 'model': fasterRCNN.state_dict(),
+        'optimizer': optimizer.state_dict(),
+        'pooling_mode': cfg.POOLING_MODE,
+        'class_agnostic': args.class_agnostic,
+          }, save_name)
+      print('save model: {}'.format(save_name))
+      break
     for phase in ['train','val']:
     
       
@@ -468,6 +480,7 @@ if __name__ == '__main__':
     end = time.time()
     print(end - start)
   loss_info = {'train' : loss_train, 'val' : loss_val}
-  if not os.path.exists('output_train'):
-    os.makedirs('output_train')
-  pickle.dump(loss_info,open('output_trainval/loss_info.pkl','wb'))
+
+  if not os.path.exists(phh.save_loss_dir):
+    os.makedirs(phh.save_loss_dir)
+  pickle.dump(loss_info,open(phh.save_loss_dir + '/loss_info.pkl','wb'))
